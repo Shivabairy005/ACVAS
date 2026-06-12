@@ -1,0 +1,164 @@
+Project: ACVAS — Ambient Context Volume Adaptation System
+
+Language: Python 3.10+
+
+Entry point: main.py
+
+File structure — create exactly these files, nothing else:
+acvas/
+├── main.py
+├── capture.py
+├── inference.py
+├── classifier.py
+├── hysteresis.py
+├── actuator.py
+├── server.py
+├── logger.py
+├── config.yaml
+├── static/
+│   └── index.html
+└── requirements.txt
+
+requirements.txt — exact contents:
+pyaudio
+numpy
+tensorflow
+tensorflow-hub
+websockets
+pyyaml
+pycaw       # Windows only
+comtypes    # Windows only
+
+config.yaml — exact contents:
+yamlsample_rate: 16000
+chunk_duration_sec: 1
+ws_port: 8765
+http_port: 8766
+hysteresis_frames: 5
+hysteresis_majority: 3
+min_hold_seconds: 3
+confidence_threshold: 0.15
+volume_ramp_step: 0.05
+ramp_interval_ms: 50
+
+environments:
+  silent:
+    volume: 0.0
+    yamnet_indices: [0, 9]
+  office:
+    volume: 0.30
+    yamnet_indices: [1, 2, 3, 132]
+  home:
+    volume: 0.75
+    yamnet_indices: [137, 138, 139, 140]
+  crowded:
+    volume: 1.0
+    yamnet_indices: [5, 6, 40, 396]
+
+capture.py — contract:
+
+Function: async def run_capture(audio_queue: asyncio.Queue, config: dict)
+Opens PyAudio stream: rate=16000, channels=1, format=paInt16, frames_per_buffer=16000
+Reads one chunk per iteration, converts to numpy.float32, divides by 32768.0 to normalize to [-1.0, 1.0]
+Puts waveform into audio_queue — if queue is full (maxsize=5) drop the chunk, do not block
+Runs in an infinite loop inside a while True
+
+
+inference.py — contract:
+
+Global variable model = None at module level
+Function: def load_model() — calls hub.load("https://tfhub.dev/google/yamnet/1"), assigns to model
+Function: def run_yamnet(waveform: np.ndarray) -> tuple[int, float]
+
+Calls model(waveform) → gets scores, embeddings, spectrogram
+mean_scores = np.mean(scores.numpy(), axis=0) → shape (521,)
+Returns (int(np.argmax(mean_scores)), float(np.max(mean_scores)))
+
+
+load_model() must be called from main.py before the asyncio loop starts
+
+
+classifier.py — contract:
+
+Hardcoded dict YAMNET_ENV_MAP matching environments block in config.yaml
+Function: def classify(top_idx: int, score: float, config: dict) -> tuple[str, float]
+
+If score < config["confidence_threshold"] → return ("unknown", score)
+For each env in config environments, check if top_idx is in its yamnet_indices
+Return matching (env_label, score), default to ("unknown", score) if no match
+
+
+
+
+hysteresis.py — contract:
+
+Class HysteresisFilter
+
+__init__(self, config) — creates deque(maxlen=config["hysteresis_frames"]), stores config, self.last_change_time = 0, self.last_confirmed = None
+def update(self, env_label: str) -> str | None
+
+Appends env_label to deque
+Counts most common label in deque
+If count >= config["hysteresis_majority"] AND time.time() - self.last_change_time >= config["min_hold_seconds"] AND label differs from self.last_confirmed
+Then update self.last_change_time, self.last_confirmed, return the label
+Otherwise return None
+
+
+
+
+
+
+actuator.py — contract:
+
+Function: def get_current_volume() -> float — returns current system volume as float 0.0–1.0
+Function: def set_volume(target: float) — ramps from current to target
+
+Step size 0.05, sleep 0.05s per step using time.sleep
+On Windows: use pycaw — AudioUtilities.GetSpeakers(), cast to IAudioEndpointVolume, call SetMasterVolumeLevelScalar(level, None)
+On Linux: use subprocess.run(["amixer", "set", "Master", f"{int(target*100)}%"])
+Detect OS with sys.platform == "win32"
+
+
+
+
+server.py — contract:
+
+CLIENTS = set() — global set of connected WebSocket objects
+async def broadcast(message: dict) — json.dumps(message) → send to all clients in CLIENTS, remove disconnected ones silently
+async def ws_handler(websocket) — add to CLIENTS on connect, remove on disconnect, listen for incoming messages, if msg["type"] == "override" call actuator.set_volume(msg["volume"]) via executor
+async def serve_http() — use http.server.SimpleHTTPRequestHandler serving the static/ directory on config["http_port"]
+async def start_server(config) — starts websockets.serve(ws_handler, "0.0.0.0", config["ws_port"])
+
+
+logger.py — contract:
+
+Function: def log_event(env: str, confidence: float, volume: float)
+Appends one row to acvas_log.csv
+Columns: timestamp (ISO format), env, confidence (2 decimal places), volume (2 decimal places)
+Creates file with header row if it does not exist
+
+
+main.py — contract:
+
+Loads config.yaml using pyyaml
+Calls inference.load_model() — blocking, before loop starts
+Creates audio_queue = asyncio.Queue(maxsize=5) and event_queue = asyncio.Queue(maxsize=5) and broadcast_queue = asyncio.Queue(maxsize=10)
+Runs these five coroutines together with asyncio.gather:
+
+capture.run_capture(audio_queue, config)
+inference_loop(audio_queue, event_queue, config) — reads from audio_queue, calls run_in_executor for YAMNet, puts result in event_queue
+pipeline_loop(event_queue, broadcast_queue, config) — runs classifier + hysteresis + actuator + logger, puts broadcast payload in broadcast_queue
+broadcast_loop(broadcast_queue) — reads from broadcast_queue, calls server.broadcast()
+server.start_server(config)
+
+
+
+
+static/index.html — contract:
+
+Single HTML file, no external CSS frameworks, no npm, pure vanilla JS
+WebSocket connects to ws://<SERVER_IP>:8765 — the SERVER_IP should be a JS variable at the top of the script set to window.location.hostname so it automatically uses the laptop's IP
+On message: parse JSON, update three UI elements — env label with colour, volume bar width, prepend to event log
+Override section: a range input 0–100 and a button — on click sends JSON.stringify({type:"override", volume: slider.value/100})
+Auto-reconnect: on WebSocket onclose, wait 3 seconds then reconnect
+Env colour mapping in JS: silent=green, office=blue, home=amber, crowded=red, unknown=gray

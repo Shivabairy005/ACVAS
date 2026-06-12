@@ -1,0 +1,24 @@
+sample_rate: 16000
+chunk_duration_sec: 1
+ws_port: 8765
+http_port: 8766
+hysteresis_frames: 5
+hysteresis_majority: 3
+min_hold_seconds: 3
+confidence_threshold: 0.15
+volume_ramp_step: 0.05
+ramp_interval_ms: 50
+
+environments:
+  silent:
+    volume: 0.0
+    yamnet_indices: [0, 9]
+  office:
+    volume: 0.30
+    yamnet_indices: [1, 2, 3, 132]
+  home:
+    volume: 0.75
+    yamnet_indices: [137, 138, 139, 140]
+  crowded:
+    volume: 1.0
+    yamnet_indices: [5, 6, 40, 396]

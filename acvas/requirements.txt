@@ -1,0 +1,8 @@
+pyaudio
+numpy
+tensorflow
+tensorflow-hub
+websockets
+pyyaml
+pycaw       # Windows only
+comtypes    # Windows only
