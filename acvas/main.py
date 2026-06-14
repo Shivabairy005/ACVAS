@@ -76,12 +76,12 @@ async def pipeline_loop(
 
         if confirmed is not None:
             if confirmed == "unknown":
-                # Fall back to the last known volume instead of dropping to 0.5
-                target_vol = last_known_volume
+                # Reset to the default (middle) volume instead of sticking to last known
+                target_vol = config.get("default_volume", 0.50)
             else:
                 # Look up target volume for the confirmed environment
                 env_cfg = config["environments"].get(confirmed)
-                target_vol = env_cfg["volume"] if env_cfg else 0.5
+                target_vol = env_cfg["volume"] if env_cfg else config.get("default_volume", 0.50)
                 last_known_volume = target_vol
 
             # Ramp volume (blocking — dispatch to executor, passing config parameters)
