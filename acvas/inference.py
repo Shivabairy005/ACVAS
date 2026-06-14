@@ -21,7 +21,7 @@ def load_model() -> None:
     Must be called once from main.py before ``asyncio.run()`` starts.
     """
     global model
-    print("[inference] Loading YAMNet model from TensorFlow Hub …")
+    print("[inference] Loading YAMNet model from TensorFlow Hub ...")
     try:
         model = hub.load("https://tfhub.dev/google/yamnet/1")
         print("[inference] YAMNet model loaded successfully.")

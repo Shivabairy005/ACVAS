@@ -37,7 +37,7 @@ async def run_capture(audio_queue: asyncio.Queue, config: dict) -> None:
     )
 
     loop = asyncio.get_event_loop()
-    print("[capture] Microphone stream opened — listening …")
+    print("[capture] Microphone stream opened - listening ...")
 
     try:
         while True:

@@ -89,7 +89,7 @@ async def pipeline_loop(
 
             # Log the transition
             logger.log_event(confirmed, conf, target_vol)
-            print(f"[main] Environment → {confirmed} (conf={conf:.2f}, vol={target_vol:.0%})")
+            print(f"[main] Environment -> {confirmed} (conf={conf:.2f}, vol={target_vol:.0%})")
 
             # Enqueue broadcast payload
             payload = {
@@ -122,7 +122,7 @@ def main() -> None:
         config = yaml.safe_load(f)
 
     print("=" * 50)
-    print("  ACVAS — Ambient Context Volume Adaptation System")
+    print("  ACVAS - Ambient Context Volume Adaptation System")
     print("=" * 50)
     print()
 
@@ -153,7 +153,7 @@ def main() -> None:
             server.start_server(config),
         )
 
-    print("[main] Starting ACVAS …")
+    print("[main] Starting ACVAS ...")
     print(f"[main] Dashboard: http://0.0.0.0:{config['http_port']}")
     print(f"[main] WebSocket: ws://0.0.0.0:{config['ws_port']}")
     print()

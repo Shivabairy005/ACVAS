@@ -12,12 +12,10 @@ import time
 
 def _get_windows_volume_interface():
     """Return the IAudioEndpointVolume COM interface (Windows only)."""
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities
 
     devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    return interface.QueryInterface(IAudioEndpointVolume)
+    return devices.EndpointVolume
 
 
 def get_current_volume() -> float:

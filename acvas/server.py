@@ -38,6 +38,7 @@ async def broadcast(message: dict) -> None:
 
     Disconnected clients are silently removed from the CLIENTS set.
     """
+    global CLIENTS
     # Update current system state
     STATE.update(message)
 
@@ -87,7 +88,7 @@ async def ws_handler(websocket) -> None:
                 await loop.run_in_executor(
                     None, actuator.set_volume, target_volume, CONFIG,
                 )
-                print(f"[server] Manual override → volume {target_volume:.0%}")
+                print(f"[server] Manual override -> volume {target_volume:.0%}")
                 
                 # Broadcast the manual override to all other connected clients
                 await broadcast({
