@@ -5,6 +5,7 @@ Loads the YAMNet model from TensorFlow Hub and runs inference on 1-second
 audio waveforms, returning the top class index and its confidence score.
 """
 
+import sys
 import numpy as np
 import tensorflow_hub as hub
 
@@ -21,8 +22,13 @@ def load_model() -> None:
     """
     global model
     print("[inference] Loading YAMNet model from TensorFlow Hub …")
-    model = hub.load("https://tfhub.dev/google/yamnet/1")
-    print("[inference] YAMNet model loaded successfully.")
+    try:
+        model = hub.load("https://tfhub.dev/google/yamnet/1")
+        print("[inference] YAMNet model loaded successfully.")
+    except Exception as e:
+        print(f"\n[ERROR] Failed to load YAMNet model from TF Hub: {e}")
+        print("Please check your internet connection and verify tensorflow-hub installation.")
+        sys.exit(1)
 
 
 def run_yamnet(waveform: np.ndarray) -> tuple[int, float]:

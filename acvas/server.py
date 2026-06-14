@@ -19,6 +19,16 @@ import websockets
 import actuator
 
 
+# Global state container to sync initial dashboard connections
+STATE: dict = {
+    "env": "unknown",
+    "confidence": 0.0,
+    "volume": 0.5,
+}
+
+# Local config storage for override handler
+CONFIG: dict = {}
+
 # Global set of connected WebSocket client objects
 CLIENTS: set = set()
 
@@ -28,13 +38,17 @@ async def broadcast(message: dict) -> None:
 
     Disconnected clients are silently removed from the CLIENTS set.
     """
+    # Update current system state
+    STATE.update(message)
+
     if not CLIENTS:
         return
 
     payload = json.dumps(message)
     disconnected = set()
 
-    for ws in CLIENTS:
+    # Iterate over a copy of set to prevent RuntimeError: Set changed size during iteration
+    for ws in list(CLIENTS):
         try:
             await ws.send(payload)
         except websockets.ConnectionClosed:
@@ -46,12 +60,19 @@ async def broadcast(message: dict) -> None:
 async def ws_handler(websocket) -> None:
     """Handle a single WebSocket connection lifecycle.
 
-    On connect: adds to CLIENTS.
+    On connect: adds to CLIENTS and pushes current status state immediately.
     On message: if ``type == "override"``, dispatches volume change.
     On disconnect: removes from CLIENTS.
     """
     CLIENTS.add(websocket)
     print(f"[server] WebSocket client connected ({len(CLIENTS)} total)")
+
+    # Send current state immediately to synchronize dashboard
+    try:
+        await websocket.send(json.dumps(STATE))
+    except websockets.ConnectionClosed:
+        CLIENTS.discard(websocket)
+        return
 
     try:
         async for raw_msg in websocket:
@@ -64,9 +85,16 @@ async def ws_handler(websocket) -> None:
                 target_volume = float(msg.get("volume", 0.5))
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
-                    None, actuator.set_volume, target_volume,
+                    None, actuator.set_volume, target_volume, CONFIG,
                 )
                 print(f"[server] Manual override → volume {target_volume:.0%}")
+                
+                # Broadcast the manual override to all other connected clients
+                await broadcast({
+                    "env": "manual_override",
+                    "confidence": 1.0,
+                    "volume": target_volume,
+                })
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -95,6 +123,9 @@ async def start_server(config: dict) -> None:
     The HTTP server runs in a daemon thread so it doesn't block the
     asyncio event loop.
     """
+    global CONFIG
+    CONFIG = config
+
     http_port = config["http_port"]
     ws_port = config["ws_port"]
 

@@ -6,6 +6,7 @@ normalizes them to float32 in [-1.0, 1.0], and places them on an async queue.
 """
 
 import asyncio
+from functools import partial
 
 import numpy as np
 import pyaudio
@@ -40,10 +41,16 @@ async def run_capture(audio_queue: asyncio.Queue, config: dict) -> None:
 
     try:
         while True:
-            # Read raw bytes from microphone (blocking — run in executor)
-            raw = await loop.run_in_executor(
-                None, stream.read, chunk_size,
-            )
+            try:
+                # Read raw bytes from microphone (blocking — run in executor)
+                raw = await loop.run_in_executor(
+                    None,
+                    partial(stream.read, chunk_size, exception_on_overflow=False),
+                )
+            except Exception as e:
+                print(f"[capture] Error reading audio stream: {e}")
+                await asyncio.sleep(0.1)
+                continue
 
             # Convert to normalised float32 waveform in [-1.0, 1.0]
             waveform = np.frombuffer(raw, dtype=np.int16).astype(np.float32)

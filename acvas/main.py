@@ -56,6 +56,13 @@ async def pipeline_loop(
     """
     hyst = hyst_mod.HysteresisFilter(config)
     loop = asyncio.get_event_loop()
+
+    # Retrieve current volume as the baseline last known volume
+    try:
+        last_known_volume = await loop.run_in_executor(None, actuator.get_current_volume)
+    except Exception:
+        last_known_volume = 0.5
+
     print("[main] Pipeline loop started")
 
     while True:
@@ -68,12 +75,17 @@ async def pipeline_loop(
         confirmed = hyst.update(env_label)
 
         if confirmed is not None:
-            # Look up target volume for the confirmed environment
-            env_cfg = config["environments"].get(confirmed)
-            target_vol = env_cfg["volume"] if env_cfg else 0.5
+            if confirmed == "unknown":
+                # Fall back to the last known volume instead of dropping to 0.5
+                target_vol = last_known_volume
+            else:
+                # Look up target volume for the confirmed environment
+                env_cfg = config["environments"].get(confirmed)
+                target_vol = env_cfg["volume"] if env_cfg else 0.5
+                last_known_volume = target_vol
 
-            # Ramp volume (blocking — dispatch to executor)
-            await loop.run_in_executor(None, actuator.set_volume, target_vol)
+            # Ramp volume (blocking — dispatch to executor, passing config parameters)
+            await loop.run_in_executor(None, actuator.set_volume, target_vol, config)
 
             # Log the transition
             logger.log_event(confirmed, conf, target_vol)
@@ -116,6 +128,14 @@ def main() -> None:
 
     # Load YAMNet model (blocking, before event loop)
     inference.load_model()
+    
+    # Query current volume to initialize server state prior to loop start
+    try:
+        initial_vol = actuator.get_current_volume()
+        server.STATE["volume"] = initial_vol
+    except Exception as e:
+        print(f"[main] Warning: Could not retrieve initial system volume: {e}")
+        
     print()
 
     # Create async queues
