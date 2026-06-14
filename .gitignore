@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Project configuration / IDEs
+.idea/
+.vscode/
+
+# Local database / logs / user data
+acvas_log.csv
+neccessary_details.txt
+neccessary_details.txt.bak
+*.log
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

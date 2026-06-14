@@ -5,17 +5,15 @@ import numpy as np
 import sys
 import pyaudio
 
-# Add acvas to path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'acvas'))
 import capture
 
 async def main():
     # Load configuration
-    config_path = os.path.join(os.path.dirname(__file__), "acvas", "config.yaml")
+    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
-    print("=== Diagnostic: Testing acvas/capture.py ===")
+    print("=== Diagnostic: Testing capture.py ===")
     print(f"Sample Rate: {config['sample_rate']}")
     print(f"Chunk Duration: {config['chunk_duration_sec']} second(s)")
     
