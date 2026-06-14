@@ -22,18 +22,12 @@ def get_current_volume() -> float:
     """Return the current system master volume as a float in [0.0, 1.0]."""
     if sys.platform == "win32":
         import comtypes
-        co_init = False
         try:
             comtypes.CoInitialize()
-            co_init = True
         except OSError:
             pass
-        try:
-            volume = _get_windows_volume_interface()
-            return volume.GetMasterVolumeLevelScalar()
-        finally:
-            if co_init:
-                comtypes.CoUninitialize()
+        volume = _get_windows_volume_interface()
+        return volume.GetMasterVolumeLevelScalar()
     else:
         # Linux fallback — parse amixer output
         import subprocess
@@ -61,39 +55,33 @@ def set_volume(target: float, config: dict = None) -> None:
 
     if sys.platform == "win32":
         import comtypes
-        co_init = False
         try:
             comtypes.CoInitialize()
-            co_init = True
         except OSError:
             pass
-        try:
-            volume_ctl = _get_windows_volume_interface()
-            current = volume_ctl.GetMasterVolumeLevelScalar()
-            
-            step = config.get("volume_ramp_step", 0.05) if config else 0.05
-            interval = (config.get("ramp_interval_ms", 50) / 1000.0) if config else 0.05
+        volume_ctl = _get_windows_volume_interface()
+        current = volume_ctl.GetMasterVolumeLevelScalar()
+        
+        step = config.get("volume_ramp_step", 0.05) if config else 0.05
+        interval = (config.get("ramp_interval_ms", 50) / 1000.0) if config else 0.05
 
-            if abs(current - target) < step:
-                volume_ctl.SetMasterVolumeLevelScalar(target, None)
-                return
+        if abs(current - target) < step:
+            volume_ctl.SetMasterVolumeLevelScalar(target, None)
+            return
 
-            direction = 1 if target > current else -1
-            level = current
+        direction = 1 if target > current else -1
+        level = current
 
-            while (direction == 1 and level < target) or \
-                  (direction == -1 and level > target):
-                level += direction * step
-                # Clamp to [0.0, 1.0] and don't overshoot target
-                if direction == 1:
-                    level = min(level, target)
-                else:
-                    level = max(level, target)
-                volume_ctl.SetMasterVolumeLevelScalar(level, None)
-                time.sleep(interval)
-        finally:
-            if co_init:
-                comtypes.CoUninitialize()
+        while (direction == 1 and level < target) or \
+              (direction == -1 and level > target):
+            level += direction * step
+            # Clamp to [0.0, 1.0] and don't overshoot target
+            if direction == 1:
+                level = min(level, target)
+            else:
+                level = max(level, target)
+            volume_ctl.SetMasterVolumeLevelScalar(level, None)
+            time.sleep(interval)
     else:
         # Linux — single amixer call (no ramping granularity via CLI)
         import subprocess
