@@ -13,6 +13,7 @@ import asyncio
 import os
 import sys
 
+import numpy as np
 import yaml
 
 import capture
@@ -30,18 +31,19 @@ async def inference_loop(
     config: dict,
 ) -> None:
     """Read waveforms from *audio_queue*, run YAMNet in a thread, and push
-    ``(top_idx, score)`` results into *event_queue*.
+    ``(top_idx, score, rms)`` results into *event_queue*.
     """
     loop = asyncio.get_event_loop()
     print("[main] Inference loop started")
 
     while True:
         waveform = await audio_queue.get()
+        rms = float(np.sqrt(np.mean(waveform ** 2)))
         top_idx, score = await loop.run_in_executor(
             None, inference.run_yamnet, waveform,
         )
         try:
-            event_queue.put_nowait((top_idx, score))
+            event_queue.put_nowait((top_idx, score, rms))
         except asyncio.QueueFull:
             pass  # Drop if downstream is slow
 
@@ -66,10 +68,10 @@ async def pipeline_loop(
     print("[main] Pipeline loop started")
 
     while True:
-        top_idx, score = await event_queue.get()
+        top_idx, score, rms = await event_queue.get()
 
         # Classify
-        env_label, conf = classifier.classify(top_idx, score, config)
+        env_label, conf = classifier.classify(top_idx, score, rms, config)
 
         # Hysteresis filter — returns new label only on confirmed transition
         confirmed = hyst.update(env_label)
